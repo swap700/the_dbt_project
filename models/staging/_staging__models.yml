@@ -1,0 +1,185 @@
+version: 2
+
+# Staging model documentation and tests
+# dbt test types used here:
+#   - not_null     : column must not contain nulls
+#   - unique       : column must have no duplicates
+#   - accepted_values: column must only contain the listed values
+#   - relationships: FK integrity check (references another model)
+
+models:
+  - name: stg_olist__customers
+    description: >
+      Cleaned customer data. Note: customer_id is ORDER-scoped in Olist —
+      a single person can have multiple customer_ids. Use customer_unique_id
+      to identify a real person across orders.
+    columns:
+      - name: customer_id
+        description: Order-level customer identifier
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_unique_id
+        description: True unique person identifier
+        data_tests:
+          - not_null
+      - name: customer_state
+        description: 2-letter Brazilian state code
+        data_tests:
+          - not_null
+
+  - name: stg_olist__orders
+    description: >
+      Cleaned orders table. Central fact in the raw schema. Timestamps cast
+      to proper types; delivery delay computed as a derived column.
+    columns:
+      - name: order_id
+        description: Primary key
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_id
+        description: FK to stg_olist__customers
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_olist__customers')
+              field: customer_id
+      - name: order_status
+        description: Current order status
+        data_tests:
+          - not_null
+          - accepted_values:
+              values:
+                - delivered
+                - shipped
+                - canceled
+                - invoiced
+                - processing
+                - approved
+                - unavailable
+                - created
+      - name: purchased_at
+        data_tests:
+          - not_null
+
+  - name: stg_olist__order_items
+    description: >
+      One row per item in an order. An order can contain multiple items
+      from different sellers. order_item_key is a surrogate PK.
+    columns:
+      - name: order_item_key
+        description: Surrogate primary key (order_id + order_item_id)
+        data_tests:
+          - not_null
+          - unique
+      - name: order_id
+        description: FK to stg_olist__orders
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_olist__orders')
+              field: order_id
+      - name: product_id
+        description: FK to stg_olist__products
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_olist__products')
+              field: product_id
+      - name: seller_id
+        description: FK to stg_olist__sellers
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_olist__sellers')
+              field: seller_id
+      - name: item_price
+        data_tests:
+          - not_null
+      - name: freight_value
+        data_tests:
+          - not_null
+
+  - name: stg_olist__order_payments
+    description: >
+      One row per payment method applied to an order. A single order can
+      have multiple rows (e.g., partial voucher + credit card).
+    columns:
+      - name: order_id
+        description: FK to stg_olist__orders
+        data_tests:
+          - not_null
+          - relationships:
+              to: ref('stg_olist__orders')
+              field: order_id
+      - name: payment_type
+        data_tests:
+          - not_null
+          - accepted_values:
+              values:
+                - credit_card
+                - boleto
+                - voucher
+                - debit_card
+                - not_defined
+      - name: payment_amount
+        data_tests:
+          - not_null
+
+  - name: stg_olist__order_reviews
+    description: >
+      Customer reviews. review_id is NOT unique in raw data (Olist quirk).
+      Use order_id for joining; one review per order is enforced downstream.
+    columns:
+      - name: review_id
+        description: Review identifier (not unique in raw — Olist data quirk)
+        data_tests:
+          - not_null
+      - name: order_id
+        description: FK to stg_olist__orders
+        data_tests:
+          - not_null
+      - name: review_score
+        description: 1–5 star rating
+        data_tests:
+          - not_null
+          - accepted_values:
+              values: [1, 2, 3, 4, 5]
+
+  - name: stg_olist__products
+    description: Product catalog with English category names joined in.
+    columns:
+      - name: product_id
+        description: Primary key
+        data_tests:
+          - not_null
+          - unique
+      - name: category_name_en
+        description: English product category (coalesced to 'unknown' if no translation)
+        data_tests:
+          - not_null
+
+  - name: stg_olist__sellers
+    description: Seller/merchant catalog.
+    columns:
+      - name: seller_id
+        description: Primary key
+        data_tests:
+          - not_null
+          - unique
+      - name: seller_state
+        description: 2-letter Brazilian state code
+        data_tests:
+          - not_null
+
+  - name: stg_olist__geolocation
+    description: >
+      One row per zip code prefix (deduplicated from raw).
+      Lat/lng represent the centroid (average of all readings for that zip).
+    columns:
+      - name: zip_code_prefix
+        description: Primary key
+        data_tests:
+          - not_null
+          - unique

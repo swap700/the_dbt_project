@@ -1,0 +1,149 @@
+version: 2
+
+# Mart models: the final layer. These feed Tableau directly.
+# Every column used in a dashboard should be tested here.
+
+models:
+  - name: fct_orders
+    description: >
+      Primary order fact table. One row per order, enriched with item aggregates,
+      payment details, delivery metrics, and review scores.
+      GRAIN: order_id
+    columns:
+      - name: order_key
+        description: Surrogate primary key
+        data_tests:
+          - not_null
+          - unique
+      - name: order_id
+        description: Natural order identifier
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_unique_id
+        description: True unique customer identifier — join to dim_customers
+        data_tests:
+          - not_null
+      - name: order_status
+        data_tests:
+          - not_null
+          - accepted_values:
+              values:
+                - delivered
+                - shipped
+                - canceled
+                - invoiced
+                - processing
+                - approved
+                - unavailable
+                - created
+      - name: purchase_date
+        data_tests:
+          - not_null
+      - name: order_gross_revenue
+        description: Total revenue for this order (items + freight)
+        data_tests:
+          - not_null
+      - name: item_count
+        data_tests:
+          - not_null
+      - name: primary_payment_type
+        data_tests:
+          - accepted_values:
+              values:
+                - credit_card
+                - boleto
+                - voucher
+                - debit_card
+                - not_defined
+      - name: review_score
+        data_tests:
+          - accepted_values:
+              values: [1, 2, 3, 4, 5]
+
+  - name: fct_revenue_daily
+    description: >
+      Daily aggregated revenue table. Pre-computed for fast Tableau performance.
+      Includes rolling 7-day average and month-to-date cumulative revenue.
+      GRAIN: calendar day (delivered orders only)
+    columns:
+      - name: revenue_date
+        description: Primary key — one row per day
+        data_tests:
+          - not_null
+          - unique
+      - name: gross_revenue
+        description: Total delivered order revenue on this day
+        data_tests:
+          - not_null
+      - name: orders_count
+        data_tests:
+          - not_null
+
+  - name: dim_customers
+    description: >
+      Customer dimension. One row per REAL customer (customer_unique_id).
+      Includes CLV metrics, segmentation, and geographic coordinates for mapping.
+    columns:
+      - name: customer_key
+        description: Surrogate primary key
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_unique_id
+        description: Natural primary key
+        data_tests:
+          - not_null
+          - unique
+      - name: total_orders
+        data_tests:
+          - not_null
+      - name: lifetime_revenue
+        data_tests:
+          - not_null
+      - name: customer_segment
+        data_tests:
+          - not_null
+          - accepted_values:
+              values:
+                - one_time
+                - occasional
+                - repeat
+      - name: clv_tier
+        data_tests:
+          - not_null
+          - accepted_values:
+              values:
+                - high_value
+                - mid_value
+                - low_value
+
+  - name: dim_sellers
+    description: >
+      Seller dimension. One row per seller, enriched with aggregated performance
+      metrics and a composite seller_score (0–100).
+    columns:
+      - name: seller_key
+        description: Surrogate primary key
+        data_tests:
+          - not_null
+          - unique
+      - name: seller_id
+        description: Natural primary key
+        data_tests:
+          - not_null
+          - unique
+      - name: seller_score
+        description: Composite performance score (0–100)
+      - name: seller_tier
+        data_tests:
+          - not_null
+          - accepted_values:
+              values:
+                - top_performer
+                - good
+                - average
+                - needs_improvement
+      - name: total_revenue
+        data_tests:
+          - not_null

@@ -1,0 +1,41 @@
+name: 'olist_ecommerce'
+version: '1.0.0'
+config-version: 2
+
+# The profile that dbt uses to connect to Snowflake (matches profiles.yml)
+profile: 'olist_ecommerce'
+
+# Directory paths
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Model configuration by layer
+# Each layer gets its own schema and materialization strategy
+models:
+  olist_ecommerce:
+
+    # STAGING: Views on top of raw source tables
+    # Why views? Staging is cheap to recompute, always fresh, no storage cost
+    staging:
+      +materialized: view
+      +schema: staging
+
+    # INTERMEDIATE: Incrementally-ready building blocks
+    # Ephemeral = no database object created, inlined as CTEs in downstream models
+    intermediate:
+      +materialized: ephemeral
+
+    # MARTS: Tables that power dashboards and BI tools
+    # Why tables? Fast query performance for end-users and Tableau
+    marts:
+      +materialized: table
+      +schema: marts

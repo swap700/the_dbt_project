@@ -1,0 +1,132 @@
+version: 2
+
+# Sources declare where your raw data lives in Snowflake.
+# dbt uses these to:
+#   1. Generate source() references (avoids hardcoding db.schema.table)
+#   2. Run source freshness checks (dbt source freshness)
+#   3. Build the lineage graph all the way back to raw tables
+
+sources:
+  - name: olist_raw
+    description: >
+      Raw Olist Brazilian E-Commerce data loaded into Snowflake.
+      8 relational tables covering customers, orders, payments, reviews,
+      products, sellers, and geolocation.
+    database: OLIST_DB
+    schema: RAW
+    tables:
+      - name: customers
+        description: One row per customer. customer_id is order-level; customer_unique_id tracks the same person across orders.
+        columns:
+          - name: customer_id
+            description: Order-level customer identifier (FK to orders table)
+          - name: customer_unique_id
+            description: True unique customer identifier — one person may have many customer_ids
+          - name: customer_zip_code_prefix
+            description: First 5 digits of customer zip code
+          - name: customer_city
+          - name: customer_state
+
+      - name: orders
+        description: One row per order. The central fact table in the raw schema.
+        columns:
+          - name: order_id
+            description: Primary key
+          - name: customer_id
+            description: FK to customers
+          - name: order_status
+            description: "delivered, shipped, canceled, invoiced, processing, approved, unavailable, created"
+          - name: order_purchase_timestamp
+          - name: order_approved_at
+          - name: order_delivered_carrier_date
+          - name: order_delivered_customer_date
+          - name: order_estimated_delivery_date
+
+      - name: order_items
+        description: One row per item within an order. An order can have multiple items.
+        columns:
+          - name: order_id
+            description: FK to orders
+          - name: order_item_id
+            description: Sequential item number within the order (1, 2, 3...)
+          - name: product_id
+            description: FK to products
+          - name: seller_id
+            description: FK to sellers
+          - name: shipping_limit_date
+          - name: price
+            description: Item price in BRL
+          - name: freight_value
+            description: Freight cost for this item in BRL
+
+      - name: order_payments
+        description: One row per payment method used on an order. An order may have multiple payment rows (e.g., voucher + credit card).
+        columns:
+          - name: order_id
+            description: FK to orders
+          - name: payment_sequential
+            description: Sequence number when multiple payment methods are used
+          - name: payment_type
+            description: "credit_card, boleto, voucher, debit_card"
+          - name: payment_installments
+            description: Number of installments chosen by the customer
+          - name: payment_value
+            description: Value paid via this payment method in BRL
+
+      - name: order_reviews
+        description: Customer reviews submitted after delivery.
+        columns:
+          - name: review_id
+            description: Primary key (not always unique — some reviews were re-submitted)
+          - name: order_id
+            description: FK to orders
+          - name: review_score
+            description: 1–5 star rating
+          - name: review_comment_title
+          - name: review_comment_message
+          - name: review_creation_date
+          - name: review_answer_timestamp
+
+      - name: products
+        description: Product catalog.
+        columns:
+          - name: product_id
+            description: Primary key
+          - name: product_category_name
+            description: Category name in Portuguese
+          - name: product_name_lenght
+            description: "Note: typo in raw data ('lenght' not 'length') — corrected in staging"
+          - name: product_description_lenght
+            description: "Note: typo in raw data ('lenght' not 'length') — corrected in staging"
+          - name: product_photos_qty
+          - name: product_weight_g
+          - name: product_length_cm
+          - name: product_height_cm
+          - name: product_width_cm
+
+      - name: sellers
+        description: Seller/merchant catalog.
+        columns:
+          - name: seller_id
+            description: Primary key
+          - name: seller_zip_code_prefix
+          - name: seller_city
+          - name: seller_state
+
+      - name: geolocation
+        description: >
+          Zip code → lat/lng mapping. Contains multiple rows per zip code prefix
+          (average/centroid not pre-computed in raw). Use carefully.
+        columns:
+          - name: geolocation_zip_code_prefix
+          - name: geolocation_lat
+          - name: geolocation_lng
+          - name: geolocation_city
+          - name: geolocation_state
+
+      - name: product_category_name_translation
+        description: Maps Portuguese product_category_name to English.
+        columns:
+          - name: product_category_name
+            description: Portuguese category name (FK to products)
+          - name: product_category_name_english

@@ -1,0 +1,55 @@
+version: 2
+
+# Intermediate models are ephemeral — no database objects are created.
+# They're inlined as CTEs in downstream mart models.
+# Testing here catches logic bugs before they propagate to marts.
+
+models:
+  - name: int_orders__joined
+    description: >
+      One row per order, enriched with aggregated item, payment, and review data.
+      Central building block for both fct_orders and fct_revenue_daily.
+    columns:
+      - name: order_id
+        description: Primary key
+        data_tests:
+          - not_null
+          - unique
+      - name: order_gross_revenue
+        description: Sum of price + freight across all items in the order
+        data_tests:
+          - not_null
+      - name: order_status
+        data_tests:
+          - not_null
+
+  - name: int_customer_orders__grouped
+    description: >
+      One row per REAL customer (customer_unique_id). Aggregates all orders
+      across a person's lifetime to support CLV and segmentation analysis.
+    columns:
+      - name: customer_unique_id
+        description: Primary key — the true unique person identifier
+        data_tests:
+          - not_null
+          - unique
+      - name: total_orders
+        data_tests:
+          - not_null
+      - name: lifetime_revenue
+        data_tests:
+          - not_null
+
+  - name: int_seller_metrics__grouped
+    description: >
+      One row per seller with aggregated performance metrics and a composite
+      seller_score (0–100) combining review ratings, on-time delivery rate,
+      and order volume.
+    columns:
+      - name: seller_id
+        description: Primary key
+        data_tests:
+          - not_null
+          - unique
+      - name: seller_score
+        description: Composite performance score 0–100
